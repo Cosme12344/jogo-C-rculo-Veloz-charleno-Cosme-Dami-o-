@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<title>Círculo Veloz</title>
+<style>
+  html, body {
+    margin: 0; padding: 0;
+    width: 100vw; height: 100vh;
+    overflow: hidden;
+    background: #111;
+    font-family: Arial, sans-serif;
+    color: #eee;
+  }
+  canvas {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw;
+    height: 100vh;
+    display: block;
+    background: #222;
+    z-index: 0;
+    border: none;
+    border-radius: 0;
+  }
+  #info {
+    position: fixed;
+    top: 10px; left: 10px;
+    display: flex;
+    gap: 8px;
+    font-size: 28px;
+    z-index: 10;
+    user-select:none;
+  }
+  .heart {
+    animation: pulseHeart 2s ease-in-out infinite;
+    text-shadow:
+      0 0 5px #f00,
+      0 0 10px #f00,
+      0 0 20px #f44,
+      0 0 30px #f44;
+  }
+  #level {
+    position: fixed;
+    top: 10px; right: 10px;
+    font-size: 28px;
+    z-index: 10;
+  }
+  #menu, #gameOverMenu {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-image: url('menu.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+
+    color: #eee;
+    z-index: 20;
+  }
+  #menu > h1, #gameOverMenu > h1 {
+    color: #07f;
+    font-size: 48px;
+    margin-bottom: 20px;
+    text-shadow: 0 0 10px #07f;
+    animation: pulseTitle 2s infinite;
+    background: rgba(0,0,0,0.5);
+    padding: 12px 24px;
+    border-radius: 12px;
+  }
+  #menu > p, #gameOverMenu > #gameOverMsg {
+    font-size: 20px;
+    margin-bottom: 20px;
+    line-height: 1.4;
+    background: rgba(0,0,0,0.5);
+    padding: 12px 20px;
+    border-radius: 12px;
+    max-width: 90%;
+    text-align: center;
+  }
+  button {
+    cursor: pointer;
+    background: #07f;
+    border: none;
+    color: white;
+    font-size: 24px;
+    padding: 14px 40px;
+    border-radius: 8px;
+    box-shadow: 0 0 15px #07f;
+    animation: pulseButton 2s infinite;
+    user-select:none;
+    transition: background-color 0.3s;
+    max-width: 90%;
+  }
+  button:hover {
+    background-color: #0af;
+  }
+  @keyframes pulseHeart {
+    0%,100% {
+      transform: scale(1);
+      text-shadow:
+        0 0 5px #f00,
+        0 0 10px #f00,
+        0 0 20px #f44,
+        0 0 30px #f44;
+    }
+    50% {
+      transform: scale(1.15);
+      text-shadow:
+        0 0 15px #ff6666,
+        0 0 30px #ff6666,
+        0 0 45px #ff9999,
+        0 0 60px #ff9999;
+    }
+  }
+  @keyframes pulseTitle {
+    0%, 100% {
+      text-shadow: 0 0 10px #07f, 0 0 30px #07f;
+      transform: scale(1);
+    }
+    50% {
+      text-shadow: 0 0 20px #0af, 0 0 40px #0af;
+      transform: scale(1.05);
+    }
+  }
+  @keyframes pulseButton {
+    0%, 100% {
+      box-shadow: 0 0 15px #07f, 0 0 30px #07f;
+      transform: scale(1);
+    }
+    50% {
+      box-shadow: 0 0 30px #0af, 0 0 60px #0af;
+      transform: scale(1.1);
+    }
+  }
+  @keyframes dashPulse {
+    0% {
+      opacity: 0.7;
+      transform: scale(1);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(3);
+    }
+  }
+  .dash-effect {
+    position: absolute;
+    border-radius: 50%;
+    border: 3px solid #0af;
+    box-shadow: 0 0 20px #0af, 0 0 40px #0af;
+    pointer-events: none;
+    animation: dashPulse 0.5s ease-out forwards;
+    z-index: 20;
+  }
+</style>
+</head>
+<body>
+<div id="info"></div>
+<div id="level">Nível: 1</div>
+<canvas id="game"></canvas>
+<div id="menu">
+  <h1>Círculo Veloz</h1>
+  <p>Controle a nave <span style="color:#ff69b4;">rosa</span> e evite os <span style="color:#f00;">meteoros</span>!</p>
+  <p><strong>Controles:</strong><br>WASD para mover<br>Espaço para dash</p>
+  <p><strong>Vidas:</strong> 3</p>
+  <button id="startBtn">Começar</button>
+</div>
+<div id="gameOverMenu" style="display:none;">
+  <h1>💀 GAME OVER 💀</h1>
+  <div id="gameOverMsg"></div>
+  <button id="restartBtn">Reiniciar</button>
+</div>
+<script>
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const info = document.getElementById('info');
+  const levelDisplay = document.getElementById('level');
+  const menu = document.getElementById('menu');
+  const gameOverMenu = document.getElementById('gameOverMenu');
+  const gameOverMsg = document.getElementById('gameOverMsg');
+  const startBtn = document.getElementById('startBtn');
+  const restartBtn = document.getElementById('restartBtn');
+  const gameOverSound = new Audio('gamerover.wav');
+gameOverSound.preload = 'auto';
+gameOverSound.volume = 0.9;
+  const danoSound = new Audio('Dano.mp3');
+danoSound.preload = 'auto';
+danoSound.volume = 0.9;
+  let player;
+  let enemies = [];
+  let keys = {};
+  let lives = 3;
+  let level = 1;
+  let levelTimer = 0;
+  let lastTime = 0;
+  let gameOver = false;
+  let gameStarted = false;
+  let dashEffects = [];
+  const dashSound = new Audio('Dash.mp3');
+  dashSound.preload = 'auto';
+  dashSound.volume = 0.9;
+  const naveImg = new Image();
+  naveImg.src = 'nave.png';
+  const enemyImg = new Image();
+  enemyImg.src = 'meteoro.png';
+  const bgSpaceImg = new Image();
+  bgSpaceImg.src = 'space.jpg';
+  function initPlayer() {
+    player = {
+      x: canvas.width / 2,
+      y: canvas.height / 2,
+      radius: 15,
+      speed: 5,
+      dx: 0,
+      dy: 0,
+      dashCooldown: 0,
+      dashing: false,
+      angle: 0,
+    };
+  }
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    if (!player) {
+      initPlayer();
+    } else {
+      player.x = Math.min(canvas.width - player.radius, Math.max(player.radius, player.x));
+      player.y = Math.min(canvas.height - player.radius, Math.max(player.radius, player.y));
+    }
+  }
+  function updateHearts() {
+    info.innerHTML = '';
+    for(let i=0; i < lives; i++) {
+      const heart = document.createElement('div');
+      heart.className = 'heart';
+      heart.textContent = '❤️';
+      info.appendChild(heart);
+    }
+  }
+  function circleCollision(c1, c2) {
+    const dx = c1.x - c2.x;
+    const dy = c1.y - c2.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    return dist < c1.radius + c2.radius;
+  }
+  function spawnEnemy() {
+    const directions = ['left', 'right', 'top', 'bottom'];
+    const dir = directions[Math.floor(Math.random() * directions.length)];
+    const minRadius = 15;
+    const maxRadius = 25;
+    const radius = Math.random() * (maxRadius - minRadius) + minRadius;
+    let x, y, speed, dx = 0, dy = 0;
+    speed = 3 + Math.random() * 2 + level * 0.5;
+    switch(dir) {
+      case 'left':
+        x = -radius;
+        y = Math.random() * (canvas.height - radius * 2) + radius;
+        dx = speed;
+        dy = 0;
+        break;
+      case 'right':
+        x = canvas.width + radius;
+        y = Math.random() * (canvas.height - radius * 2) + radius;
+        dx = -speed;
+        dy = 0;
+        break;
+      case 'top':
+        x = Math.random() * (canvas.width - radius * 2) + radius;
+        y = -radius;
+        dx = 0;
+        dy = speed;
+        break;
+      case 'bottom':
+        x = Math.random() * (canvas.width - radius * 2) + radius;
+        y = canvas.height + radius;
+        dx = 0;
+        dy = -speed;
+        break;
+    }
+    enemies.push({ x, y, radius, dx, dy });
+  }
+  function updateLevel(delta) {
+    levelTimer += delta;
+    if(levelTimer >= 10000) {
+      level++;
+      levelTimer = 0;
+      levelDisplay.textContent = 'Nível: ' + level;
+    }
+  }
+  function createDashEffect() {
+    const el = document.createElement('div');
+    el.className = 'dash-effect';
+    el.style.width = el.style.height = (player.radius*2) + 'px';
+    el.style.left = (player.x - player.radius) + 'px';
+    el.style.top = (player.y - player.radius) + 'px';
+    document.body.appendChild(el);
+    dashEffects.push(el);
+    setTimeout(() => {
+      el.remove();
+      dashEffects = dashEffects.filter(e => e !== el);
+    }, 500);
+  }
+  function update() {
+    if (!gameStarted || gameOver) return;
+    const now = performance.now();
+    const delta = now - lastTime;
+    lastTime = now;
+    updateLevel(delta);
+    player.dy = keys['w'] ? -player.speed : keys['s'] ? player.speed : 0;
+    player.dx = keys['a'] ? -player.speed : keys['d'] ? player.speed : 0;
+    if(player.dx !== 0 || player.dy !== 0) {
+      player.angle = Math.atan2(player.dy, player.dx);
+    }
+    if (keys[' '] && player.dashCooldown === 0 && (player.dx !== 0 || player.dy !== 0)) {
+      player.x += player.dx * 10;
+      player.y += player.dy * 10;
+      player.dashCooldown = 30;
+      player.dashing = true;
+      createDashEffect();
+      dashSound.currentTime = 0;
+      dashSound.play().catch(e => console.log('dash play blocked:', e));
+    } else {
+      player.dashing = false;
+    }
+    if (player.dashCooldown > 0) player.dashCooldown--;
+    player.x = Math.min(canvas.width - player.radius, Math.max(player.radius, player.x + player.dx));
+    player.y = Math.min(canvas.height - player.radius, Math.max(player.radius, player.y + player.dy));
+    if (Math.random() < 0.02 + level * 0.002) spawnEnemy();
+    for(let i = enemies.length - 1; i >= 0; i--) {
+      const e = enemies[i];
+      e.x += e.dx;
+      e.y += e.dy;
+      if (e.x < -e.radius || e.x > canvas.width + e.radius || e.y < -e.radius || e.y > canvas.height + e.radius) {
+        enemies.splice(i, 1);
+        continue;
+      }
+      if(circleCollision(player, e)) {
+    lives--;
+    updateHearts();
+    danoSound.currentTime = 0; 
+    danoSound.play().catch(err => console.log('Som de dano bloqueado:', err));
+    enemies.splice(i, 1);
+    if(lives <= 0) {
+        gameOver = true;
+        gameStarted = false;
+        showGameOver();
+    }
+}
+    }
+  }
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if(bgSpaceImg.complete) {
+      ctx.drawImage(bgSpaceImg, 0, 0, canvas.width, canvas.height);
+    } else {
+      ctx.fillStyle = '#222';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    if(naveImg.complete) {
+      ctx.save();
+      ctx.translate(player.x, player.y);
+      ctx.rotate(player.angle + Math.PI / 2);
+      ctx.drawImage(
+        naveImg,
+        -player.radius,
+        -player.radius,
+        player.radius * 2,
+        player.radius * 2
+      );
+      ctx.restore();
+    } else {
+      ctx.fillStyle = '#07f';
+      ctx.beginPath();
+      ctx.arc(player.x, player.y, player.radius, 0, Math.PI*2);
+      ctx.fill();
+    }
+    enemies.forEach(e => {
+      if(enemyImg.complete) {
+        ctx.drawImage(
+          enemyImg,
+          e.x - e.radius,
+          e.y - e.radius,
+          e.radius * 2,
+          e.radius * 2
+        );
+      } else {
+        ctx.fillStyle = '#f00';
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, e.radius, 0, Math.PI*2);
+        ctx.fill();
+      }
+    });
+  }
+  function loop() {
+    update();
+    draw();
+    if(!gameOver && gameStarted) requestAnimationFrame(loop);
+  }
+function showGameOver() {
+  gameOverSound.currentTime = 0;
+  gameOverSound.play().catch(e => console.log('game over sound blocked:', e));
+  gameOverMsg.innerHTML = `Você chegou ao nível ${level}!`;
+  gameOverMenu.style.display = 'flex';
+}
+  function startGame() {
+    lives = 3;
+    level = 1;
+    levelTimer = 0;
+    gameOver = false;
+    enemies = [];
+    player.dashCooldown = 0;
+    updateHearts();
+    levelDisplay.textContent = 'Nível: 1';
+    menu.style.display = 'none';
+    gameOverMenu.style.display = 'none';
+    gameStarted = true;
+    lastTime = performance.now();
+    loop();
+  }
+  window.addEventListener('keydown', e => {
+    keys[e.key.toLowerCase()] = true;
+    if(e.key === ' ') e.preventDefault();
+  });
+  window.addEventListener('keyup', e => {
+    keys[e.key.toLowerCase()] = false;
+  });
+  startBtn.addEventListener('click', startGame);
+  restartBtn.addEventListener('click', startGame);
+  window.addEventListener('resize', () => {
+    resize();
+    if(gameStarted) draw();
+  });
+  resize();
+  updateHearts();
+</script>
+</body>
+</html>
